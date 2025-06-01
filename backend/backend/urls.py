@@ -14,10 +14,15 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+# backend/urls.py
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+from rag.views import DocumentUploadView, ChatView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('rag.urls')),
-]
+    path('api/upload/', DocumentUploadView.as_view(), name='upload'),
+    path('api/chat/', ChatView.as_view(), name='chat'),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,32 +1,60 @@
+# docchat/views.py
 from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
-from . import rag_utils
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Document
+from .serializers import DocumentSerializer
+from .utils import load_and_process_document, get_qa_chain
 import os
+from django.conf import settings
+import tempfile
+import shutil
 
-class UploadDocumentView(APIView):
+class DocumentUploadView(APIView):
     parser_classes = [MultiPartParser]
+    
+    def post(self, request, format=None):
+        serializer = DocumentSerializer(data=request.data)
+        if serializer.is_valid():
+            document = serializer.save()
+            file_path = os.path.join(settings.MEDIA_ROOT, document.file.name)
+            
+            # Process document and get vectorstore path
+            vectorstore_path = load_and_process_document(file_path)
+            
+            # Store vectorstore path in session
+            request.session['vectorstore_path'] = vectorstore_path
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def post(self, request):
-        uploaded_file = request.FILES.get("file")
-        if not uploaded_file:
-            return Response({"error": "No file uploaded"}, status=400)
-
-        file_path = f"temp/{uploaded_file.name}"
-        os.makedirs("temp", exist_ok=True)
-        with open(file_path, "wb+") as f:
-            for chunk in uploaded_file.chunks():
-                f.write(chunk)
-
-        docs = rag_utils.load_and_split_document(file_path)
-        rag_utils.add_to_vectorstore(docs)
-        return Response({"message": "Document uploaded and processed"})
-
-class AskQuestionView(APIView):
-    def post(self, request):
-        query = request.data.get("query")
-        if not query:
-            return Response({"error": "No query provided"}, status=400)
-
-        result = rag_utils.run_qa(query)
-        return Response({"answer": result})
+class ChatView(APIView):
+    def post(self, request, format=None):
+        question = request.data.get('question')
+        if not question:
+            return Response({"error": "Question is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        vectorstore_path = request.session.get('vectorstore_path')
+        if not vectorstore_path:
+            return Response({"error": "No document uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create QA chain for this request
+        qa_chain = get_qa_chain(vectorstore_path)
+        result = qa_chain({"query": question})
+        
+        return Response({
+            "answer": result["result"],
+            "sources": [doc.metadata["source"] for doc in result["source_documents"]]
+        })
+    
+    def delete(self, request, format=None):
+        # Clean up vectorstore files when session ends
+        vectorstore_path = request.session.get('vectorstore_path')
+        if vectorstore_path:
+            try:
+                shutil.rmtree(os.path.dirname(vectorstore_path))
+            except:
+                pass
+            del request.session['vectorstore_path']
+        return Response(status=status.HTTP_204_NO_CONTENT)
