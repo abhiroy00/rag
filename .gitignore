@@ -61,3 +61,6 @@ htmlcov/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Ignore .env files
+.env
