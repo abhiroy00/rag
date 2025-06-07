@@ -52,14 +52,24 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # Should be early
-    'django.middleware.common.CommonMiddleware'
+    'django.middleware.common.CommonMiddleware',
 ]
 
+# Allow credentials like cookies or tokens to be sent
+CORS_ALLOW_CREDENTIALS = True
+
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "http://localhost:5173",  # or "http://127.0.0.1:5173"
 ]
+
 CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = 'backend.urls'
+from corsheaders.defaults import default_headers
+# Optional: allows all headers, for safety
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'content-disposition',
+]
+
 
 TEMPLATES = [
     {
